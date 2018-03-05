@@ -1,12 +1,13 @@
-﻿using System.Data.Entity;
+﻿using AutoMapper;
+using System;
 using System.Linq;
-using System.Web.Mvc;
+using System.Web.Http;
+using Vidly.Dtos;
 using Vidly.Models;
-using Vidly.ViewModels;
 
-namespace Vidly.Controllers
+namespace Vidly.Controllers.Api
 {
-    public class CustomersController : Controller
+    public class CustomersController : ApiController
     {
         private ApplicationDbContext _context;
 
@@ -15,84 +16,72 @@ namespace Vidly.Controllers
             _context = new ApplicationDbContext();
         }
 
-        protected override void Dispose(bool disposing)
+        // GET /api/customers
+        public IHttpActionResult GetCustomers()
         {
-            _context.Dispose();
+            var customerDtos = _context.Customers.ToList().Select(Mapper.Map<Customer, CustomerDto>);
+
+            return Ok(customerDtos);
         }
 
-        public ActionResult New()
-        {
-            var membershipTypes = _context.MembershipTypes.ToList();
-            var viewModel = new CustomerFormViewModel
-            {
-                Customer = new Customer(),
-                MembershipTypes = membershipTypes
-            };
-
-            return View("CustomerForm", viewModel);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public ActionResult Save(Customer customer)
-        {
-            if (!ModelState.IsValid)
-            {
-                var viewModel = new CustomerFormViewModel
-                {
-                    Customer = customer,
-                    MembershipTypes = _context.MembershipTypes.ToList()
-                };
-
-                return View("CustomerForm", viewModel);
-            }
-            if (customer.Id == 0)
-                _context.Customers.Add(customer);
-            else
-            {
-                var customerInDb = _context.Customers.Single(c => c.Id == customer.Id);
-                customerInDb.Name = customer.Name;
-                customerInDb.Birthdate = customer.Birthdate;
-                customerInDb.MembershipTypeId = customer.MembershipTypeId;
-                customerInDb.IsSubscribedToNewsletter = customer.IsSubscribedToNewsletter;
-            }
-
-            _context.SaveChanges();
-
-            return RedirectToAction("Index", "Customers");
-        }
-
-        public ViewResult Index()
-        {
-            var customers = _context.Customers.Include(c => c.MembershipType).ToList();
-
-            return View(customers);
-        }
-
-        public ActionResult Details(int id)
-        {
-            var customer = _context.Customers.Include(c => c.MembershipType).SingleOrDefault(c => c.Id == id);
-
-            if (customer == null)
-                return HttpNotFound();
-
-            return View(customer);
-        }
-
-        public ActionResult Edit(int id)
+        // GET /api/customers/1
+        public IHttpActionResult GetCustomer(int id)
         {
             var customer = _context.Customers.SingleOrDefault(c => c.Id == id);
 
             if (customer == null)
-                return HttpNotFound();
+                return NotFound();
 
-            var viewModel = new CustomerFormViewModel
-            {
-                Customer = customer,
-                MembershipTypes = _context.MembershipTypes.ToList()
-            };
+            return Ok(Mapper.Map<Customer, CustomerDto>(customer));
+        }
 
-            return View("CustomerForm", viewModel);
+        // POST /api/customers
+        [HttpPost]
+        public IHttpActionResult CreateCustomer(CustomerDto customerDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest();
+
+            var customer = Mapper.Map<CustomerDto, Customer>(customerDto);
+            _context.Customers.Add(customer);
+            _context.SaveChanges();
+
+            customerDto.Id = customer.Id;
+            return Created(new Uri(Request.RequestUri + "/" + customer.Id), customerDto);
+        }
+
+        // PUT /api/customers/1
+        [HttpPut]
+        public IHttpActionResult UpdateCustomer(int id, CustomerDto customerDto)
+        {
+            if (!ModelState.IsValid)
+                return BadRequest();
+
+            var customerInDb = _context.Customers.SingleOrDefault(c => c.Id == id);
+
+            if (customerInDb == null)
+                return NotFound();
+
+            Mapper.Map(customerDto, customerInDb);
+
+            _context.SaveChanges();
+
+            return Ok();
+        }
+
+        // DELETE /api/customers/1
+        [HttpDelete]
+        public IHttpActionResult DeleteCustomer(int id)
+        {
+            var customerInDb = _context.Customers.SingleOrDefault(c => c.Id == id);
+
+            if (customerInDb == null)
+                return NotFound();
+
+            _context.Customers.Remove(customerInDb);
+            _context.SaveChanges();
+
+            return Ok();
         }
     }
 }
